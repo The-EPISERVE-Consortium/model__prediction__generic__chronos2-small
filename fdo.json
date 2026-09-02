@@ -1,0 +1,47 @@
+{
+  "@context": "https://schema.org/",
+  "@type": "SoftwareApplication",
+  "name": "model__prediction__generic__chronos2-small",
+  "description": "Generic zero-shot multivariate time-series forecast model using Chronos-2 small. Reads a parquet with a leading datetime x column and one or more numeric y columns; forecasts one configured target y column using the historical multivariate context.",
+  "url": "ghcr.io/the-episerve-consortium/model__prediction__generic__chronos2-small",
+  "codeRepository": "https://github.com/The-EPISERVE-Consortium/model__prediction__generic__chronos2-small",
+  "applicationCategory": "algorithm",
+  "operatingSystem": "Linux",
+  "runtimePlatform": "Docker",
+  "author": {
+    "@type": "Organization",
+    "name": "EPISERVE Consortium"
+  },
+  "additionalProperty": [
+    {
+      "@type": "PropertyValue",
+      "name": "target_column",
+      "description": "Name of the numeric y column to forecast.",
+      "valueRequired": true,
+      "valueType": "string"
+    },
+    {
+      "@type": "PropertyValue",
+      "name": "history_length",
+      "description": "Number of rows to use as model context. Window ends at total_rows - prediction_offset. Minimum 3. Values above 8192 use only the most recent 8192 rows.",
+      "valueRequired": true,
+      "minValue": 3
+    },
+    {
+      "@type": "PropertyValue",
+      "name": "prediction_length",
+      "description": "Number of steps to forecast ahead.",
+      "valueRequired": true,
+      "minValue": 1,
+      "maxValue": 1024
+    },
+    {
+      "@type": "PropertyValue",
+      "name": "prediction_offset",
+      "description": "Rows to skip at the end before the history window. Use for back-testing against known data.",
+      "valueRequired": false,
+      "minValue": 0,
+      "value": 0
+    }
+  ]
+}
