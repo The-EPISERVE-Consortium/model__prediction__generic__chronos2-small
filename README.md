@@ -3,8 +3,10 @@
 Zero-shot time-series forecasting with
 [Chronos-2 small](https://huggingface.co/autogluon/chronos-2-small). Takes a
 parquet with a leading datetime x column and one or more numeric y columns,
-and forecasts one configured `target_column` — using the other y columns as
-historical multivariate context — with 10th/90th-percentile bounds.
+and forecasts the **second column** — using any further columns as historical
+multivariate context — with 10th/90th-percentile bounds. With just `x, y` it
+behaves like a single-series forecaster; the config is the same as
+`model__prediction__generic__timesfm`.
 
 **In:** `input.parquet` + `config.json` under `/work/input/`.
 **Out:** `predictions.tsv` under `/work/output/`.
@@ -13,18 +15,19 @@ historical multivariate context — with 10th/90th-percentile bounds.
 
 | Path | Description |
 |---|---|
-| `/work/input/input.parquet` | ≥ 2 columns: x (first, datetime-like) and one or more numeric y columns. |
+| `/work/input/input.parquet` | ≥ 2 columns: x (first, datetime-like), the target y (second), then any number of numeric context columns. |
 | `/work/input/config.json` | Run parameters — see [Config](#config). |
 
 **x column** — the first column. Must be unique, monotonic increasing, and
 evenly spaced. String date columns are parsed as datetimes; future timestamps
 continue the inferred frequency / step.
 
-**y columns** — every column after x, all numeric. `config.target_column` is
-the one that gets forecast; the rest are passed to Chronos-2 as historical
-context. Interior NaN gaps of ≤ 8 rows are interpolated per column; longer
-interior gaps are rejected. Leading/trailing NaN runs are filled from the
-nearest value. Needs ≥ `history_length + prediction_offset` rows.
+**y columns** — the **second column** is the forecast target. Any further
+columns are numeric and are passed to Chronos-2 as historical context (order
+them upstream with `data_transformation_sql`: `SELECT x, target, ctx1, … FROM df`).
+Interior NaN gaps of ≤ 8 rows are interpolated per column; longer interior
+gaps are rejected. Leading/trailing NaN runs are filled from the nearest
+value. Needs ≥ `history_length + prediction_offset` rows.
 
 ## Output
 
@@ -33,8 +36,8 @@ nearest value. Needs ≥ `history_length + prediction_offset` rows.
 | Column | Description |
 |---|---|
 | `<x_col>` | Extrapolated future timestamp. |
-| `<target_column>` | Point forecast. |
-| `<target_column>_q10` / `<target_column>_q90` | 10th / 90th percentile. |
+| `<y>` | Point forecast (`<y>` = the second column's name). |
+| `<y>_q10` / `<y>_q90` | 10th / 90th percentile. |
 
 ## Config
 
@@ -45,9 +48,8 @@ startup (unknown keys warn and are ignored); cross-field rules it can't
 express (e.g. `history_length + prediction_offset` ≤ input rows) are checked
 once the data loads.
 
-`target_column` names the y column to forecast. `prediction_offset` skips rows
-at the end before the history window — set it to `prediction_length` to
-forecast over already-known rows for back-testing.
+`prediction_offset` skips rows at the end before the history window — set it to
+`prediction_length` to forecast over already-known rows for back-testing.
 
 ### Checking a config without running the model
 

@@ -43,13 +43,11 @@ if config_errors:
         print(f"ERROR: {error}", file=sys.stderr)
     sys.exit(1)
 
-target_column = resolved["target_column"]
 history_length = resolved["history_length"]
 prediction_length = resolved["prediction_length"]
 prediction_offset = resolved["prediction_offset"]
 print(
     "Config: "
-    f"target_column={target_column!r}, "
     f"history_length={history_length}, "
     f"prediction_length={prediction_length}, "
     f"prediction_offset={prediction_offset}"
@@ -76,8 +74,8 @@ print(f"Loaded {len(df_full)} rows, columns: {list(df_full.columns)}")
 
 if len(df_full.columns) < 2:
     print(
-        "ERROR: input.parquet must have at least 2 columns: "
-        "x (first) and one or more y columns",
+        "ERROR: input.parquet must have at least 2 columns: x (first) and "
+        "the target y (second); any further columns are multivariate context",
         file=sys.stderr,
     )
     sys.exit(1)
@@ -94,6 +92,7 @@ if history_length + prediction_offset > len(df_full):
     sys.exit(1)
 
 x_col = df_full.columns[0]
+target_column = df_full.columns[1]
 end_idx = len(df_full) - prediction_offset
 start_idx = end_idx - history_length
 if history_length > _MAX_CONTEXT:

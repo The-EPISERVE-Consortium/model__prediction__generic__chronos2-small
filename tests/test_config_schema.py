@@ -25,7 +25,6 @@ def test_fdo_json_declares_expected_params():
     """fdo.json declares the supported config parameters in order."""
     names = [spec.name for spec in load_specs()]
     assert names == [
-        "target_column",
         "history_length",
         "prediction_length",
         "prediction_offset",
@@ -35,7 +34,6 @@ def test_fdo_json_declares_expected_params():
 def test_fdo_bounds_match_model_constants():
     """fdo.json bounds agree with the model constants."""
     specs = {spec.name: spec for spec in load_specs()}
-    assert specs["target_column"].value_type == "string"
     assert specs["history_length"].min_value == model._MIN_CONTEXT
     assert specs["history_length"].max_value is None
     assert specs["prediction_length"].min_value == 1
@@ -47,7 +45,6 @@ def test_fdo_bounds_match_model_constants():
 def test_valid_config_fills_default_offset():
     """A valid config receives the default prediction_offset."""
     resolved, errors, warnings = validate_config({
-        "target_column": "temperature",
         "history_length": 20,
         "prediction_length": 10,
     })
@@ -59,7 +56,6 @@ def test_valid_config_fills_default_offset():
 def test_explicit_offset_is_kept():
     """A valid explicit prediction_offset is preserved."""
     resolved, errors, _ = validate_config({
-        "target_column": "temperature",
         "history_length": 20,
         "prediction_length": 10,
         "prediction_offset": 4,
@@ -71,14 +67,12 @@ def test_explicit_offset_is_kept():
 @pytest.mark.parametrize(
     ("config", "needle"),
     [
-        ({"history_length": 10, "prediction_length": 5}, "missing required key: 'target_column'"),
-        ({"target_column": "temperature", "prediction_length": 5}, "missing required key: 'history_length'"),
-        ({"target_column": "temperature", "history_length": 10}, "missing required key: 'prediction_length'"),
-        ({"target_column": 1, "history_length": 10, "prediction_length": 5}, "'target_column' must be a string"),
-        ({"target_column": "temperature", "history_length": 2, "prediction_length": 5}, "'history_length' must be >= 3"),
-        ({"target_column": "temperature", "history_length": 10, "prediction_length": 0}, "'prediction_length' must be >= 1"),
-        ({"target_column": "temperature", "history_length": 10, "prediction_length": 1025}, "'prediction_length' must be <= 1024"),
-        ({"target_column": "temperature", "history_length": 10, "prediction_length": 5, "prediction_offset": -1}, "'prediction_offset' must be >= 0"),
+        ({"prediction_length": 5}, "missing required key: 'history_length'"),
+        ({"history_length": 10}, "missing required key: 'prediction_length'"),
+        ({"history_length": 2, "prediction_length": 5}, "'history_length' must be >= 3"),
+        ({"history_length": 10, "prediction_length": 0}, "'prediction_length' must be >= 1"),
+        ({"history_length": 10, "prediction_length": 1025}, "'prediction_length' must be <= 1024"),
+        ({"history_length": 10, "prediction_length": 5, "prediction_offset": -1}, "'prediction_offset' must be >= 0"),
     ],
 )
 def test_invalid_config_reports_clear_error(config, needle):
@@ -90,7 +84,6 @@ def test_invalid_config_reports_clear_error(config, needle):
 def test_unknown_key_is_a_warning_not_an_error():
     """Unknown config keys are warnings and are not resolved."""
     resolved, errors, warnings = validate_config({
-        "target_column": "temperature",
         "history_length": 10,
         "prediction_length": 5,
         "extra": 3,
@@ -103,7 +96,6 @@ def test_unknown_key_is_a_warning_not_an_error():
 def test_multiple_errors_are_all_reported():
     """Validation returns all independent per-key errors."""
     _, errors, _ = validate_config({
-        "target_column": "temperature",
         "history_length": 1,
         "prediction_length": 99999,
     })

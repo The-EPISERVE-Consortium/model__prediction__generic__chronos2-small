@@ -2,7 +2,7 @@
   "@context": "https://schema.org/",
   "@type": "SoftwareApplication",
   "name": "model__prediction__generic__chronos2-small",
-  "description": "Generic zero-shot multivariate time-series forecast model using Chronos-2 small. Reads a parquet with a leading datetime x column and one or more numeric y columns; forecasts one configured target y column using the historical multivariate context.",
+  "description": "Generic zero-shot time-series forecast model using Chronos-2 small. Reads a parquet with a leading datetime x column and one or more numeric y columns; forecasts the second column, using any further columns as historical multivariate context.",
   "url": "ghcr.io/the-episerve-consortium/model__prediction__generic__chronos2-small",
   "codeRepository": "https://github.com/The-EPISERVE-Consortium/model__prediction__generic__chronos2-small",
   "applicationCategory": "algorithm",
@@ -13,13 +13,6 @@
     "name": "EPISERVE Consortium"
   },
   "additionalProperty": [
-    {
-      "@type": "PropertyValue",
-      "name": "target_column",
-      "description": "Name of the numeric y column to forecast.",
-      "valueRequired": true,
-      "valueType": "string"
-    },
     {
       "@type": "PropertyValue",
       "name": "history_length",

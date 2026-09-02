@@ -133,7 +133,6 @@ def _make_df(n=20):
 def test_check_config_accepts_valid_config_without_data(tmp_path):
     """--check-config validates config.json without reading input.parquet."""
     work_dir = _write_work_input(tmp_path, {
-        "target_column": "temperature",
         "history_length": 10,
         "prediction_length": 5,
     })
@@ -146,19 +145,17 @@ def test_check_config_accepts_valid_config_without_data(tmp_path):
 def test_missing_required_config_fails_before_data(tmp_path):
     """Missing required config keys produce clean errors before data loading."""
     work_dir = _write_work_input(tmp_path, {
-        "history_length": 10,
         "prediction_length": 5,
     })
     result = _run_cli(tmp_path, work_dir)
     assert result.returncode == 1
-    assert "missing required key: 'target_column'" in result.stderr
+    assert "missing required key: 'history_length'" in result.stderr
     assert "input.parquet" not in result.stderr
 
 
 def test_missing_input_reports_resolved_path(tmp_path):
     """Missing parquet errors include the resolved input path."""
     work_dir = _write_work_input(tmp_path, {
-        "target_column": "temperature",
         "history_length": 10,
         "prediction_length": 5,
     })
@@ -167,10 +164,9 @@ def test_missing_input_reports_resolved_path(tmp_path):
     assert f"{work_dir.resolve()}/input/input.parquet not found" in result.stderr
 
 
-def test_cli_writes_target_only_predictions(tmp_path):
-    """CLI writes predictions for the configured target column only."""
+def test_cli_forecasts_the_second_column(tmp_path):
+    """The second column is the forecast target; further columns are context only."""
     work_dir = _write_work_input(tmp_path, {
-        "target_column": "temperature",
         "history_length": 10,
         "prediction_length": 3,
     }, df=_make_df())
@@ -178,19 +174,21 @@ def test_cli_writes_target_only_predictions(tmp_path):
     assert result.returncode == 0, result.stderr
 
     output = pd.read_csv(work_dir / "output" / "predictions.tsv", sep="\t")
+    # _make_df() columns are date, incidence, temperature, mobility -> target is incidence
     assert list(output.columns) == [
         "date",
-        "temperature",
-        "temperature_q10",
-        "temperature_q90",
+        "incidence",
+        "incidence_q10",
+        "incidence_q90",
     ]
+    assert "temperature" not in output.columns
+    assert "mobility" not in output.columns
     assert len(output) == 3
 
 
 def test_prediction_offset_selects_history_window(tmp_path):
     """prediction_offset skips rows at the end before choosing history."""
     work_dir = _write_work_input(tmp_path, {
-        "target_column": "temperature",
         "history_length": 5,
         "prediction_length": 2,
         "prediction_offset": 3,
@@ -203,7 +201,6 @@ def test_prediction_offset_selects_history_window(tmp_path):
 def test_rejects_too_few_columns(tmp_path):
     """input.parquet must contain x plus at least one y column."""
     work_dir = _write_work_input(tmp_path, {
-        "target_column": "temperature",
         "history_length": 3,
         "prediction_length": 2,
     }, df=pd.DataFrame({"date": pd.date_range("2022-01-01", periods=5, freq="D")}))
@@ -215,7 +212,6 @@ def test_rejects_too_few_columns(tmp_path):
 def test_rejects_not_enough_rows(tmp_path):
     """history_length plus prediction_offset cannot exceed input rows."""
     work_dir = _write_work_input(tmp_path, {
-        "target_column": "temperature",
         "history_length": 20,
         "prediction_length": 2,
         "prediction_offset": 1,
@@ -228,7 +224,6 @@ def test_rejects_not_enough_rows(tmp_path):
 def test_model_runtime_error_exits_cleanly_without_traceback(tmp_path):
     """Non-ValueError model failures are rendered as clean ERROR lines."""
     work_dir = _write_work_input(tmp_path, {
-        "target_column": "temperature",
         "history_length": 10,
         "prediction_length": 2,
     }, df=_make_df())
@@ -247,9 +242,9 @@ def test_model_runtime_error_exits_cleanly_without_traceback(tmp_path):
 @pytest.mark.parametrize(
     ("config", "message"),
     [
-        ({"target_column": "temperature", "history_length": 2, "prediction_length": 1}, "'history_length' must be >= 3"),
-        ({"target_column": "temperature", "history_length": 3, "prediction_length": 0}, "'prediction_length' must be >= 1"),
-        ({"target_column": "temperature", "history_length": 3, "prediction_length": 1, "prediction_offset": -1}, "'prediction_offset' must be >= 0"),
+        ({"history_length": 2, "prediction_length": 1}, "'history_length' must be >= 3"),
+        ({"history_length": 3, "prediction_length": 0}, "'prediction_length' must be >= 1"),
+        ({"history_length": 3, "prediction_length": 1, "prediction_offset": -1}, "'prediction_offset' must be >= 0"),
     ],
 )
 def test_invalid_lengths_exit_before_loading_data(tmp_path, config, message):
