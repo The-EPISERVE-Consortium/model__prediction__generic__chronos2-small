@@ -50,9 +50,9 @@ jobs:
         run: |
           docker run --rm \
             --workdir /app \
-            --entrypoint python \
+            --entrypoint sh \
             episerve-model:ci \
-            -m pytest tests/ -v
+            -c "pip install --no-cache-dir -r requirements-test.txt && python -m pytest tests/ -v"
 
       - name: Push image (branch push -> latest)
         if: github.event_name == 'push' && github.ref_type == 'branch'
