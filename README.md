@@ -41,12 +41,13 @@ value. Needs ≥ `history_length + prediction_offset` rows.
 
 ## Config
 
-Parameters are declared in [`fdo.json`](fdo.json) (`additionalProperty`) — the
-source of truth for names, whether each is required, defaults, and
-`minValue`/`maxValue`. `src/run.py` validates `config.json` against it at
-startup (unknown keys warn and are ignored); cross-field rules it can't
-express (e.g. `history_length + prediction_offset` ≤ input rows) are checked
-once the data loads.
+Parameters are declared in [`fdo.json`](fdo.json), the model card (see
+*Model card* below): `episerve:parameters` is a JSON Schema of `config.json` —
+the source of truth for names, types, whether each is required, defaults and
+bounds. `src/config_schema.py` reads it, and `src/run.py` checks `config.json`
+against it at startup with `jsonschema`; an undeclared key is an error. Cross-field
+rules it can't express (e.g. `history_length + prediction_offset` ≤ input rows,
+listed as `rules` in the card) are checked once the data loads.
 
 `prediction_offset` skips rows at the end before the history window — set it to
 `prediction_length` to forecast over already-known rows for back-testing.
@@ -61,6 +62,24 @@ Validates `/work/input/config.json` against `fdo.json` and exits `0`
 (printing `config.json OK`) or `1` with `ERROR:` lines. It reads no input
 data and does not load the Chronos-2 weights. Locally:
 `WORK_DIR=./work python src/run.py --check-config`.
+
+## Model card
+
+[`fdo.json`](fdo.json) is the model card, following the EPISERVE
+[model-card v1 spec](https://github.com/The-EPISERVE-Consortium/episerve_specs/blob/main/src/episerve_specs/specs/model_card/README.md):
+parameters (`episerve:parameters`, a JSON Schema of `config.json`), input and
+output files with their columns (the context columns are one optional
+covariate column at position 2 that stands for every further column),
+resources and documentation. CI checks it (job `model-card`); locally:
+
+```bash
+pip install "git+https://github.com/The-EPISERVE-Consortium/episerve_specs@v0.3.0"
+episerve-validate fdo.json
+```
+
+The platform reads the card from this repository: the sync flow stores its
+sections in the catalog, and the API checks a run's config against
+`episerve:parameters` before starting it.
 
 ## Develop
 

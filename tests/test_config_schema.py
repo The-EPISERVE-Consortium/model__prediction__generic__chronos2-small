@@ -1,4 +1,8 @@
-"""Tests for config schema parsing and validation."""
+"""Tests for src/config_schema.py and the model card's parameter declaration.
+
+Doubles as the CI lint for fdo.json: a malformed or drifted fdo.json fails
+these tests, which run inside the built image in CI.
+"""
 
 import json
 import sys
@@ -10,59 +14,73 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
+# Stub chronos so importing `model` (for its constants) needs no torch stack.
 if "chronos" not in sys.modules:
-    chronos_stub = types.ModuleType("chronos")
-    chronos_stub.Chronos2Pipeline = MagicMock()
-    sys.modules["chronos"] = chronos_stub
+    _stub = types.ModuleType("chronos")
+    _stub.Chronos2Pipeline = MagicMock()
+    sys.modules["chronos"] = _stub
 
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
 import model  # noqa: E402
-from config_schema import ParamSpec, SchemaError, load_specs, validate_config  # noqa: E402
+from config_schema import SchemaError, load_parameters, validate_config  # noqa: E402
 
 
-def test_fdo_json_declares_expected_params():
-    """fdo.json declares the supported config parameters in order."""
-    names = [spec.name for spec in load_specs()]
-    assert names == [
-        "history_length",
-        "prediction_length",
-        "prediction_offset",
-    ]
+# --- fdo.json parses and declares the expected parameters --------------------
+
+def test_fdo_json_declares_the_three_params():
+    assert list(load_parameters()["properties"]) == ["history_length", "prediction_length", "prediction_offset"]
 
 
 def test_fdo_bounds_match_model_constants():
-    """fdo.json bounds agree with the model constants."""
-    specs = {spec.name: spec for spec in load_specs()}
-    assert specs["history_length"].min_value == model._MIN_CONTEXT
-    assert specs["history_length"].max_value is None
-    assert specs["prediction_length"].min_value == 1
-    assert specs["prediction_length"].max_value == model._MAX_PREDICTION_STEPS
-    assert specs["prediction_offset"].min_value == 0
-    assert specs["prediction_offset"].default == 0
+    """The card is the declared source of truth; assert it agrees with the
+    model constants so the two cannot silently drift."""
+    params = load_parameters()
+    props = params["properties"]
 
+    assert set(params["required"]) == {"history_length", "prediction_length"}
+    assert params["additionalProperties"] is False
+
+    assert props["history_length"]["minimum"] == model._MIN_CONTEXT
+    assert "maximum" not in props["history_length"]  # over-long is truncated, not rejected
+
+    assert props["prediction_length"]["minimum"] == 1
+    assert props["prediction_length"]["maximum"] == model._MAX_PREDICTION_STEPS
+
+    assert props["prediction_offset"]["minimum"] == 0
+    assert props["prediction_offset"]["default"] == 0
+
+
+def test_every_declared_param_is_an_integer_type():
+    for spec in load_parameters()["properties"].values():
+        assert spec["type"] == "integer"
+
+
+# --- validate_config: happy path -------------------------------------------------
 
 def test_valid_config_fills_default_offset():
-    """A valid config receives the default prediction_offset."""
-    resolved, errors, warnings = validate_config({
-        "history_length": 20,
-        "prediction_length": 10,
-    })
+    resolved, errors = validate_config({"history_length": 10, "prediction_length": 5})
     assert errors == []
-    assert warnings == []
-    assert resolved["prediction_offset"] == 0
+    assert resolved == {"history_length": 10, "prediction_length": 5, "prediction_offset": 0}
 
 
 def test_explicit_offset_is_kept():
-    """A valid explicit prediction_offset is preserved."""
-    resolved, errors, _ = validate_config({
-        "history_length": 20,
-        "prediction_length": 10,
-        "prediction_offset": 4,
-    })
+    resolved, errors = validate_config(
+        {"history_length": 10, "prediction_length": 5, "prediction_offset": 4}
+    )
     assert errors == []
     assert resolved["prediction_offset"] == 4
 
+
+def test_boundary_values_are_accepted():
+    resolved, errors = validate_config(
+        {"history_length": model._MIN_CONTEXT, "prediction_length": model._MAX_PREDICTION_STEPS,
+         "prediction_offset": 0}
+    )
+    assert errors == []
+
+
+# --- validate_config: errors ---------------------------------------------------
 
 @pytest.mark.parametrize(
     ("config", "needle"),
@@ -72,79 +90,58 @@ def test_explicit_offset_is_kept():
         ({"history_length": 2, "prediction_length": 5}, "'history_length' must be >= 3"),
         ({"history_length": 10, "prediction_length": 0}, "'prediction_length' must be >= 1"),
         ({"history_length": 10, "prediction_length": 1025}, "'prediction_length' must be <= 1024"),
-        ({"history_length": 10, "prediction_length": 5, "prediction_offset": -1}, "'prediction_offset' must be >= 0"),
+        ({"history_length": 10, "prediction_length": 5, "prediction_offset": -1},
+         "'prediction_offset' must be >= 0"),
+        ({"history_length": 1.5, "prediction_length": 5}, "'history_length' must be an integer"),
+        ({"history_length": True, "prediction_length": 5}, "'history_length' must be an integer"),
+        ({"history_length": "10", "prediction_length": 5}, "'history_length' must be an integer"),
+        ({"history_length": None, "prediction_length": 5}, "'history_length' must be an integer"),
     ],
 )
 def test_invalid_config_reports_clear_error(config, needle):
-    """Invalid config values return clear validation errors."""
-    _, errors, _ = validate_config(config)
-    assert any(needle in error for error in errors), errors
+    _, errors = validate_config(config)
+    assert any(needle in e for e in errors), errors
 
 
-def test_unknown_key_is_a_warning_not_an_error():
-    """Unknown config keys are warnings and are not resolved."""
-    resolved, errors, warnings = validate_config({
-        "history_length": 10,
-        "prediction_length": 5,
-        "extra": 3,
-    })
-    assert errors == []
-    assert any("extra" in warning for warning in warnings)
-    assert "extra" not in resolved
+def test_unknown_key_is_an_error():
+    _, errors = validate_config(
+        {"history_length": 10, "prediction_length": 5, "prediciton_offset": 3, "zz": 1}
+    )
+    assert errors == ["config.json has unrecognised key(s): 'prediciton_offset', 'zz'"]
+
+
+def test_config_must_be_an_object():
+    resolved, errors = validate_config([1, 2])
+    assert resolved == {} and errors == ["config.json: [1, 2] is not of type 'object'"]
 
 
 def test_multiple_errors_are_all_reported():
-    """Validation returns all independent per-key errors."""
-    _, errors, _ = validate_config({
-        "history_length": 1,
-        "prediction_length": 99999,
-    })
+    _, errors = validate_config({"history_length": 1, "prediction_length": 99999})
     assert len(errors) == 2
 
 
-def test_load_specs_rejects_non_list_additional_property(tmp_path):
-    """load_specs rejects non-list additionalProperty values."""
+# --- load_parameters: fdo.json lint ---------------------------------------------
+
+@pytest.mark.parametrize("card", [
+    {},                                                           # no parameters
+    {"episerve:parameters": "nope"},                              # not an object
+    {"episerve:parameters": {"type": "object", "properties": {}}},  # nothing declared
+    {"episerve:parameters": {"type": "object", "properties": {"x": {"type": "integer"}}, "required": "x"}},  # bad schema
+])
+def test_load_parameters_rejects_malformed_card(tmp_path, card):
     bad = tmp_path / "fdo.json"
-    bad.write_text(json.dumps({"additionalProperty": "nope"}))
+    bad.write_text(json.dumps(card))
     with pytest.raises(SchemaError):
-        load_specs(bad)
+        load_parameters(bad)
 
 
-def test_load_specs_rejects_missing_file(tmp_path):
-    """load_specs rejects a missing fdo.json path."""
+def test_load_parameters_rejects_missing_file(tmp_path):
     with pytest.raises(SchemaError):
-        load_specs(tmp_path / "does-not-exist.json")
+        load_parameters(tmp_path / "does-not-exist.json")
 
 
-def test_load_specs_rejects_invalid_json(tmp_path):
-    """load_specs rejects invalid JSON."""
+def test_load_parameters_rejects_invalid_json(tmp_path):
     bad = tmp_path / "fdo.json"
     bad.write_text("{ not json")
     with pytest.raises(SchemaError):
-        load_specs(bad)
-
-
-def test_load_specs_rejects_duplicate_names(tmp_path):
-    """load_specs rejects duplicate parameter names."""
-    bad = tmp_path / "fdo.json"
-    bad.write_text(json.dumps({"additionalProperty": [
-        {"name": "x", "valueRequired": True},
-        {"name": "x", "valueRequired": False},
-    ]}))
-    with pytest.raises(SchemaError):
-        load_specs(bad)
-
-
-@pytest.mark.parametrize("entry", [
-    {"valueRequired": True},
-    {"name": "x", "valueRequired": "yes"},
-    {"name": "x", "valueType": "date"},
-    {"name": "x", "minValue": 1.5},
-    {"name": "x", "minValue": 10, "maxValue": 1},
-    {"name": "x", "valueRequired": True, "value": 0},
-    {"name": "x", "valueType": "string", "value": 0},
-])
-def test_param_spec_rejects_malformed_entry(entry):
-    """ParamSpec rejects malformed parameter declarations."""
-    with pytest.raises(SchemaError):
-        ParamSpec(entry)
+        load_parameters(bad)

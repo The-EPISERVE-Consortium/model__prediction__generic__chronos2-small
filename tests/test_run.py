@@ -153,6 +153,18 @@ def test_missing_required_config_fails_before_data(tmp_path):
     assert "input.parquet" not in result.stderr
 
 
+def test_unknown_config_key_fails(tmp_path):
+    """The model card forbids undeclared keys, so a misspelt one stops the run."""
+    work_dir = _write_work_input(tmp_path, {
+        "history_length": 10,
+        "prediction_length": 5,
+        "prediciton_offset": 2,
+    })
+    result = _run_cli(tmp_path, work_dir, args=("--check-config",))
+    assert result.returncode == 1
+    assert "ERROR: config.json has unrecognised key(s): 'prediciton_offset'" in result.stderr
+
+
 def test_missing_input_reports_resolved_path(tmp_path):
     """Missing parquet errors include the resolved input path."""
     work_dir = _write_work_input(tmp_path, {

@@ -1,2 +1,3 @@
 chronos-forecasting>=2.0
 pandas[pyarrow]
+jsonschema>=4.18

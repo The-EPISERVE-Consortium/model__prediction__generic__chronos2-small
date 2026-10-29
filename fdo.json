@@ -1,6 +1,10 @@
 {
-  "@context": "https://schema.org/",
+  "@context": [
+    "https://schema.org/",
+    { "episerve": "https://api.episerve.zib.de/schemas/model-card/v1#" }
+  ],
   "@type": "SoftwareApplication",
+  "conformsTo": "https://api.episerve.zib.de/schemas/model-card/v1.json",
   "name": "model__prediction__generic__chronos2-small",
   "description": "Generic zero-shot time-series forecast model using Chronos-2 small. Reads a parquet with a leading datetime x column and one or more numeric y columns; forecasts the second column, using any further columns as historical multivariate context.",
   "url": "ghcr.io/the-episerve-consortium/model__prediction__generic__chronos2-small",
@@ -8,33 +12,112 @@
   "applicationCategory": "algorithm",
   "operatingSystem": "Linux",
   "runtimePlatform": "Docker",
-  "author": {
-    "@type": "Organization",
-    "name": "EPISERVE Consortium"
-  },
-  "additionalProperty": [
-    {
-      "@type": "PropertyValue",
-      "name": "history_length",
-      "description": "Number of rows to use as model context. Window ends at total_rows - prediction_offset. Minimum 3. Values above 8192 use only the most recent 8192 rows.",
-      "valueRequired": true,
-      "minValue": 3
-    },
-    {
-      "@type": "PropertyValue",
-      "name": "prediction_length",
-      "description": "Number of steps to forecast ahead.",
-      "valueRequired": true,
-      "minValue": 1,
-      "maxValue": 1024
-    },
-    {
-      "@type": "PropertyValue",
-      "name": "prediction_offset",
-      "description": "Rows to skip at the end before the history window. Use for back-testing against known data.",
-      "valueRequired": false,
-      "minValue": 0,
-      "value": 0
+  "author": { "@type": "Organization", "name": "EPISERVE Consortium" },
+
+  "episerve:task": {
+    "type": "forecast",
+    "frequency": "any",
+    "probabilistic": true,
+    "covariates": true,
+    "maxHorizon": 1024,
+    "parameterRoles": {
+      "horizon": "prediction_length",
+      "history": "history_length",
+      "offset": "prediction_offset"
     }
-  ]
+  },
+
+  "episerve:parameters": {
+    "type": "object",
+    "required": ["history_length", "prediction_length"],
+    "additionalProperties": false,
+    "properties": {
+      "history_length": {
+        "type": "integer",
+        "minimum": 3,
+        "unit": "steps",
+        "description": "Number of rows to use as model context. Window ends at total_rows - prediction_offset. Minimum 3. Values above 8192 use only the most recent 8192 rows."
+      },
+      "prediction_length": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 1024,
+        "unit": "steps",
+        "description": "Number of steps to forecast ahead."
+      },
+      "prediction_offset": {
+        "type": "integer",
+        "minimum": 0,
+        "default": 0,
+        "unit": "steps",
+        "description": "Rows to skip at the end before the history window. Use for back-testing against known data."
+      }
+    },
+    "rules": [
+      "history_length + prediction_offset must not exceed the number of rows of input.parquet."
+    ]
+  },
+
+  "episerve:inputs": [
+    {
+      "file": "input.parquet",
+      "format": "application/vnd.apache.parquet",
+      "description": "One target series with optional context: the time axis first, the target second, then any number of numeric context columns. Column names are free; the time and target names are kept in the output.",
+      "minRows": 3,
+      "columns": [
+        {
+          "position": 0,
+          "role": "time",
+          "type": ["date", "datetime", "string"],
+          "description": "Unique, increasing and evenly spaced timestamps; strings are parsed as dates. The step (or calendar frequency) is inferred and used for the forecast's timestamps."
+        },
+        {
+          "position": 1,
+          "role": "target",
+          "type": "number",
+          "nullable": true,
+          "description": "The series to forecast. Interior gaps of up to 8 rows are interpolated linearly, longer interior gaps are rejected; gaps at the ends are filled with the nearest value."
+        },
+        {
+          "position": 2,
+          "role": "covariate",
+          "type": "number",
+          "nullable": true,
+          "required": false,
+          "description": "This and every further column: numeric historical context, used only for the past (no future values). Gaps are handled as for the target."
+        }
+      ]
+    }
+  ],
+
+  "episerve:outputs": [
+    {
+      "file": "predictions.tsv",
+      "format": "text/tab-separated-values",
+      "description": "One row per forecast step.",
+      "columns": [
+        { "nameFrom": { "inputRole": "time" }, "role": "time", "type": "datetime" },
+        { "nameFrom": { "inputRole": "target" }, "role": "point", "type": "number",
+          "description": "Chronos-2 point forecast." },
+        { "nameFrom": { "inputRole": "target", "suffix": "_q10" }, "role": "quantile", "level": 0.1, "type": "number" },
+        { "nameFrom": { "inputRole": "target", "suffix": "_q90" }, "role": "quantile", "level": 0.9, "type": "number" }
+      ]
+    }
+  ],
+
+  "episerve:resources": {
+    "gpu": 0,
+    "network": true
+  },
+
+  "episerve:documentation": {
+    "method": "Chronos-2 small, a pretrained time-series foundation model, applied zero-shot on CPU with the target and any context columns as one multivariate series. Context up to 8192 points.",
+    "intendedUse": "Probabilistic baseline forecasts of one epidemiological time series, optionally informed by related series.",
+    "limitations": "Only past values of the context columns are used, no known future covariates. One target series per run; no groups. The weights (about 120 MB) are downloaded from Hugging Face on the first run, so the container needs internet access. The mapping of the Chronos output columns to point and quantiles is not verified against the real model in the tests.",
+    "trainingData": "Not trained by EPISERVE; uses the published pretrained weights autogluon/chronos-2-small.",
+    "references": [
+      "https://github.com/amazon-science/chronos-forecasting",
+      "https://huggingface.co/autogluon/chronos-2-small"
+    ]
+  }
 }
