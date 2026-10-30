@@ -73,7 +73,7 @@ covariate column at position 2 that stands for every further column),
 resources and documentation. CI checks it (job `model-card`); locally:
 
 ```bash
-pip install "git+https://github.com/The-EPISERVE-Consortium/episerve_specs@v0.3.0"
+pip install "git+https://github.com/The-EPISERVE-Consortium/episerve_specs@v0.4.0"
 episerve-validate fdo.json
 ```
 
