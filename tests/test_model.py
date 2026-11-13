@@ -147,10 +147,11 @@ def test_model_loaded_once(mock_chronos):
 
 
 def test_model_uses_chronos2_small_on_cpu(mock_chronos):
-    """Chronos-2 small is loaded with CPU device mapping."""
+    """Chronos-2 small loads the pinned weights revision on CPU."""
     predict(_make_df(), "temperature", prediction_length=2)
     mock_chronos.from_pretrained.assert_called_once_with(
         "autogluon/chronos-2-small",
+        revision="ddec01313e50b6bc58ebaa92ede81bc24a3d9f9a",
         device_map="cpu",
     )
 

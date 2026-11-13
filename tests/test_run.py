@@ -53,17 +53,18 @@ class Chronos2Pipeline:
     \"\"\"Stub Chronos-2 loader.\"\"\"
 
     @classmethod
-    def from_pretrained(cls, model_id, device_map="cpu"):
+    def from_pretrained(cls, model_id, device_map="cpu", revision=None):
         \"\"\"Return a stub Chronos pipeline.
 
         Args:
             model_id: Hugging Face model ID.
             device_map: Device mapping.
+            revision: Pinned Hugging Face weights revision.
 
         Returns:
             Stub pipeline instance.
         \"\"\"
-        del model_id, device_map
+        del model_id, device_map, revision
         return _Pipeline()
 """
 

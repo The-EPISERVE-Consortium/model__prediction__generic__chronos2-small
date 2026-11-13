@@ -95,12 +95,18 @@ docker run --rm -v $(pwd)/work/input:/work/input -v $(pwd)/work/output:/work/out
 ```
 
 Chronos-2 small weights (~120 MB) download from Hugging Face on the first real run.
+The weights are pinned to commit `ddec01313e50b6bc58ebaa92ede81bc24a3d9f9a` via
+`_MODEL_REVISION` in `src/model.py`; update that constant deliberately when
+upgrading the weights. They are not bundled in the container image.
 
 ## Release
 
 Push to `main` → CI builds, tests inside the image, and pushes `:latest` to
 GHCR. `git tag v0.1.0 && git push origin v0.1.0` also publishes the pinned
 `:v0.1.0` image.
+
+Images built by CI include the source Git commit SHA in the OCI label
+`org.opencontainers.image.revision`.
 
 ## Limitations
 

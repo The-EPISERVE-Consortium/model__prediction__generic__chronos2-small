@@ -7,6 +7,7 @@ from chronos import Chronos2Pipeline
 _pipeline = None
 
 _MODEL_ID = "autogluon/chronos-2-small"
+_MODEL_REVISION = "ddec01313e50b6bc58ebaa92ede81bc24a3d9f9a"
 _SERIES_ID = "series_0"
 _ID_COLUMN = "item_id"
 _MAX_CONTEXT = 8192
@@ -199,14 +200,16 @@ def _fill_numeric_series(series: pd.Series) -> pd.Series:
 
 
 def _model():
-    """Return the cached Chronos-2 pipeline instance.
+    """Return the cached Chronos-2 pipeline at the pinned weights revision.
 
     Returns:
         Chronos2Pipeline: Loaded Chronos-2 small pipeline running on CPU.
     """
     global _pipeline
     if _pipeline is None:
-        _pipeline = Chronos2Pipeline.from_pretrained(_MODEL_ID, device_map="cpu")
+        _pipeline = Chronos2Pipeline.from_pretrained(
+            _MODEL_ID, revision=_MODEL_REVISION, device_map="cpu"
+        )
     return _pipeline
 
 
